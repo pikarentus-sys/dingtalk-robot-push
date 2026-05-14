@@ -13,10 +13,7 @@ jobs:
         with:
           url: 'https://oapi.dingtalk.com/robot/send?access_token=22fe2796127ebe0288d78fdd1e0a3b1c1e97f409e5fd680e6ad5f272c945a770'
           method: 'POST'
-          headers: |
-            {
-              "Content-Type": "application/json"
-            }
+          contentType: 'application/json'
           data: |
             {
               "msgtype": "markdown",
