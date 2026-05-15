@@ -1,8 +1,8 @@
-name: 每日早8点推送AI最新资讯
+name: 每日早8大众点AI最新资讯
 on:
   schedule:
-    - cron: '0 0 * * *'  # UTC 0点 = 北京时间早8点
-  workflow_dispatch:     # 允许手动测试
+    - cron: '0 0 * * *'  # 北京时间早8点
+  workflow_dispatch:
 
 jobs:
   send-ai-news:
@@ -11,14 +11,18 @@ jobs:
       - name: 抓取今日AI最新资讯（5条）
         id: get_news
         run: |
-          content=$(curl -s https://news.baidu.com/list?card=AI | grep -A10 "<h3>" | head -25 | sed 's/<[^>]*>//g' | sed '/^$/d' | head -5)
+          # 更换更稳定的资讯源 + 兜底内容
+          content=$(curl -s https://www.ithome.com/ai/ | grep -A5 '<a class="list_thumb"' | head -20 | sed 's/<[^>]*>//g' | sed '/^$/d' | head -5)
+          if [ -z "$content" ]; then
+            content="1. 暂无最新AI资讯，请稍后再试\n2. 可关注IT之家AI频道获取动态"
+          fi
           echo "news_content<<EOF" >> $GITHUB_OUTPUT
           echo "### 机器人提醒" >> $GITHUB_OUTPUT
           echo "### 🤖 每日AI早报（$(date +'%Y年%m月%d日')）" >> $GITHUB_OUTPUT
           echo "" >> $GITHUB_OUTPUT
           echo "$content" | awk '{print NR". " $0}' >> $GITHUB_OUTPUT
           echo "" >> $GITHUB_OUTPUT
-          echo "⏰ 每日早8点自动推送 | 来源：百度AI资讯" >> $GITHUB_OUTPUT
+          echo "⏰ 每日早8点自动推送 | 来源：IT之家AI频道" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: 推送到钉钉
