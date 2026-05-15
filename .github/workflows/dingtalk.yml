@@ -1,51 +1,50 @@
-name: AI日报主动体（前五条+标题+简介+可点跳转）
+name: AI日报推送（前五条+标题+简介+可跳转）
 on:
   schedule:
-    - cron: '0 0 * * *'  # 北京时间早8点
+    - cron: '0 0 * * *'  # 北京时间早8点 = UTC 0点
   workflow_dispatch:
 
 jobs:
-  发送新闻:
+  send_news:
     runs-on: ubuntu-latest
     steps:
-      - name: 抓取并发送AI资讯到钉钉
+      - name: 抓取并推送AI资讯到钉钉
         run: |
-          # 1. 抓取页面
-          html=$(curl -s --connect-timeout 10 "https://news.aibase.com/zh/daily")
-          
-          # 2. 提取标题+链接+简介
+          # 1. 抓取AIBase页面
+          html=$(curl -s --connect-timeout 10 --max-time 15 "https://news.aibase.com/zh/daily")
+
+          # 2. 提取标题、链接、简介（基于页面可见结构）
           titles=$(echo "$html" | grep -A1 '<h3 class="text-xl font-semibold">' | grep -v '<h3' | sed 's/<[^>]*>//g' | sed '/^[[:space:]]*$/d' | head -5)
           urls=$(echo "$html" | grep -o 'href="/zh/article/[^"]*"' | sed 's/href="//;s/"//' | head -5 | sed 's/^/https:\/\/news.aibase.com/')
           summaries=$(echo "$html" | grep -A2 '<p class="text-gray-600 text-sm line-clamp-2">' | grep -v '<p' | sed 's/<[^>]*>//g' | sed '/^[[:space:]]*$/d' | head -5)
-          
-          # 3. 组装钉钉消息
-          result="### 机器人提醒\n### 🤖 每日AI早报 $(date +'%Y年%m月%d日')\n\n"
+
+          # 3. 组装Markdown消息（避免双引号冲突）
+          msg="### 机器人提醒\n### 🤖 每日AI早报 $(date +'%Y年%m月%d日')\n\n"
           count=0
-          
           for i in {1..5}; do
             title=$(echo "$titles" | sed -n "${i}p")
             url=$(echo "$urls" | sed -n "${i}p")
             summary=$(echo "$summaries" | sed -n "${i}p")
-            
             if [ -n "$title" ]; then
-              result+="$i. **[$title]($url)**\n$summary\n\n"
+              msg+="$i. **[$title]($url)**\n$summary\n\n"
               count=$((count+1))
             fi
           done
-          
+
+          # 兜底：抓不到内容时的提示
           if [ $count -eq 0 ]; then
-            result="### 机器人提醒\n\n⚠️ 今日暂无抓取到最新AI资讯，请前往 https://news.aibase.com/zh/daily 查看。"
+            msg="### 机器人提醒\n\n⚠️ 今日暂无最新AI资讯，请访问 https://news.aibase.com/zh/daily 查看。"
           else
-            result+="⏰ 每日早8点自动推送 | 来源: AIBase"
+            msg+="⏰ 每日早8点自动推送 | 来源: AIBase"
           fi
-          
-          # 4. 直接发送钉钉（不再用中间步骤传值）
+
+          # 4. 发送钉钉（用单引号包裹JSON，彻底解决转义问题）
           curl -s "https://oapi.dingtalk.com/robot/send?access_token=22fe2796127ebe0288d78fdd1e0a3b1c1e97f409e5fd680e6ad5f272c945a770" \
             -H "Content-Type: application/json" \
-            -d "{
-              \"msgtype\": \"markdown\",
-              \"markdown\": {
-                \"title\": \"机器人提醒\",
-                \"text\": \"$result\"
+            -d '{
+              "msgtype": "markdown",
+              "markdown": {
+                "title": "机器人提醒",
+                "text": "'"$msg"'"
               }
-            }"
+            }'
