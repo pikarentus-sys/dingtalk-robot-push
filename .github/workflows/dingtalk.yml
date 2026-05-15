@@ -1,30 +1,14 @@
-name: 每日早8点推送AI最新资讯
+name: 每日早8点AI资讯
 on:
   schedule:
-    - cron: '0 0 * * *'  # 北京时间早8点
+    - cron: '0 0 * * *'
   workflow_dispatch:
 
 jobs:
-  send-ai-news:
+  send:
     runs-on: ubuntu-latest
     steps:
-      - name: 准备AI早报内容（固定5条，永不失败）
-        id: get_news
-        run: |
-          echo "news_content<<EOF" >> $GITHUB_OUTPUT
-          echo "### 机器人提醒" >> $GITHUB_OUTPUT
-          echo "### 🤖 每日AI早报（$(date +'%Y年%m月%d日')）" >> $GITHUB_OUTPUT
-          echo "" >> $GITHUB_OUTPUT
-          echo "1. OpenAI发布最新GPT-5功能预览，推理能力大幅提升" >> $GITHUB_OUTPUT
-          echo "2. 阿里通义千问开源轻量化模型，手机可本地运行" >> $GITHUB_OUTPUT
-          echo "3. 谷歌Gemini 1.5 Pro全面开放API，支持超长文本处理" >> $GITHUB_OUTPUT
-          echo "4. AI视频生成工具Sora开启内测，生成质量接近电影级" >> $GITHUB_OUTPUT
-          echo "5. 国内多家厂商宣布大模型全面降价，普惠AI时代来临" >> $GITHUB_OUTPUT
-          echo "" >> $GITHUB_OUTPUT
-          echo "⏰ 每日早8点自动推送 | AI资讯速递" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: 推送到钉钉
+      - name: 发送消息
         uses: fjogeleit/http-request-action@v1
         with:
           url: 'https://oapi.dingtalk.com/robot/send?access_token=22fe2796127ebe0288d78fdd1e0a3b1c1e97f409e5fd680e6ad5f272c945a770'
@@ -32,9 +16,8 @@ jobs:
           contentType: 'application/json'
           data: |
             {
-              "msgtype": "markdown",
-              "markdown": {
-                "title": "机器人提醒",
-                "text": "${{ steps.get_news.outputs.news_content }}"
+              "msgtype": "text",
+              "text": {
+                "content": "机器人提醒：\n1. OpenAI发布新一代大模型\n2. 阿里通义千问升级多模态能力\n3. 谷歌Gemini 1.5 Pro全面开放\n4. AI视频生成技术突破\n5. 国内AI大模型全面降价"
               }
             }
