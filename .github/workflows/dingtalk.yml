@@ -1,7 +1,7 @@
 name: AI日报推送（前五条+标题+简介+可跳转）
 on:
   schedule:
-    - cron: '0 0 * * *'  # 北京时间早8点 = UTC 0点
+    - cron: '0 0 * * *'  # 北京时间早8点
   workflow_dispatch:
 
 jobs:
@@ -10,15 +10,16 @@ jobs:
     steps:
       - name: 抓取并推送AI资讯到钉钉
         run: |
-          # 1. 抓取AIBase页面
+          # 1. 抓取页面并提取JSON数据（最稳定方式）
           html=$(curl -s --connect-timeout 10 --max-time 15 "https://news.aibase.com/zh/daily")
-
-          # 2. 提取标题、链接、简介（基于页面可见结构）
-          titles=$(echo "$html" | grep -A1 '<h3 class="text-xl font-semibold">' | grep -v '<h3' | sed 's/<[^>]*>//g' | sed '/^[[:space:]]*$/d' | head -5)
-          urls=$(echo "$html" | grep -o 'href="/zh/article/[^"]*"' | sed 's/href="//;s/"//' | head -5 | sed 's/^/https:\/\/news.aibase.com/')
-          summaries=$(echo "$html" | grep -A2 '<p class="text-gray-600 text-sm line-clamp-2">' | grep -v '<p' | sed 's/<[^>]*>//g' | sed '/^[[:space:]]*$/d' | head -5)
-
-          # 3. 组装Markdown消息（避免双引号冲突）
+          json=$(echo "$html" | grep -o '"articles":\[[^]]*]' | head -1 | sed 's/^/{"articles":/;s/$/}/')
+          
+          # 2. 提取前5条资讯（标题+链接+简介）
+          titles=$(echo "$json" | jq -r '.articles[].title' | head -5)
+          urls=$(echo "$json" | jq -r '.articles[].url' | head -5 | sed 's/^/https:\/\/news.aibase.com/')
+          summaries=$(echo "$json" | jq -r '.articles[].summary' | head -5)
+          
+          # 3. 组装Markdown消息
           msg="### 机器人提醒\n### 🤖 每日AI早报 $(date +'%Y年%m月%d日')\n\n"
           count=0
           for i in {1..5}; do
@@ -30,15 +31,15 @@ jobs:
               count=$((count+1))
             fi
           done
-
-          # 兜底：抓不到内容时的提示
+          
+          # 兜底提示
           if [ $count -eq 0 ]; then
-            msg="### 机器人提醒\n\n⚠️ 今日暂无最新AI资讯，请访问 https://news.aibase.com/zh/daily 查看。"
+            msg="### 机器人提醒\n\n⚠️ 抓取数据未成功，请直接访问 https://news.aibase.com/zh/daily 查看。"
           else
             msg+="⏰ 每日早8点自动推送 | 来源: AIBase"
           fi
-
-          # 4. 发送钉钉（用单引号包裹JSON，彻底解决转义问题）
+          
+          # 4. 发送钉钉（解决引号冲突）
           curl -s "https://oapi.dingtalk.com/robot/send?access_token=22fe2796127ebe0288d78fdd1e0a3b1c1e97f409e5fd680e6ad5f272c945a770" \
             -H "Content-Type: application/json" \
             -d '{
