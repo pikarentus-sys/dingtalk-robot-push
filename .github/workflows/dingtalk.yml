@@ -1,27 +1,12 @@
-name: 每日早8点推送AI最新资讯
+name: 测试钉钉机器人推送
 on:
-  schedule:
-    - cron: '0 0 * * *'  # 北京时间早8点
-  workflow_dispatch:
+  workflow_dispatch:  # 仅手动触发测试
 
 jobs:
-  send-ai-news:
+  test-message:
     runs-on: ubuntu-latest
     steps:
-      - name: 抓取今日AI最新资讯（5条）
-        id: get_news
-        run: |
-          content=$(curl -s https://news.baidu.com/list?card=AI | grep -A10 "<h3>" | head -25 | sed 's/<[^>]*>//g' | sed '/^$/d' | head -5)
-          echo "news_content<<EOF" >> $GITHUB_OUTPUT
-          echo "### 机器人提醒" >> $GITHUB_OUTPUT
-          echo "### 🤖 每日AI早报（$(date +'%Y年%m月%d日')）" >> $GITHUB_OUTPUT
-          echo "" >> $GITHUB_OUTPUT
-          echo "$content" | awk '{print NR". " $0}' >> $GITHUB_OUTPUT
-          echo "" >> $GITHUB_OUTPUT
-          echo "⏰ 每日早8点自动推送 | 来源：百度AI资讯" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: 推送到钉钉
+      - name: 发送测试消息
         uses: fjogeleit/http-request-action@v1
         with:
           url: 'https://oapi.dingtalk.com/robot/send?access_token=22fe2796127ebe0288d78fdd1e0a3b1c1e97f409e5fd680e6ad5f272c945a770'
@@ -29,9 +14,8 @@ jobs:
           contentType: 'application/json'
           data: |
             {
-              "msgtype": "markdown",
-              "markdown": {
-                "title": "机器人提醒",
-                "text": "${{ steps.get_news.outputs.news_content }}"
+              "msgtype": "text",
+              "text": {
+                "content": "机器人提醒：这是一条测试消息"
               }
             }
