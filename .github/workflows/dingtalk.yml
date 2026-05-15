@@ -1,60 +1,50 @@
-name: AI日报推送
+name: AI日报推送（官方API版）
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 0 * * *'  # 北京时间早8点
   workflow_dispatch:
 
 jobs:
   send_news:
     runs-on: ubuntu-latest
     steps:
-      - name: 抓取并推送AI资讯
+      - name: 调用AIBase官方API推送钉钉
         run: |
-          # 配置
           WEBHOOK="https://oapi.dingtalk.com/robot/send?access_token=22fe2796127ebe0288d78fdd1e0a3b1c1e97f409e5fd680e6ad5f272c945a770"
-          URL="https://news.aibase.com/zh/daily"
-          UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          API="https://news.aibase.com/api/news"
 
-          # 抓取页面
-          html=$(curl -s -A "$UA" "$URL")
+          # 调用官方API（最稳定，不会被屏蔽）
+          data=$(curl -s --max-time 10 "$API")
 
-          # 提取内容
-          titles=$(echo "$html" | grep -A1 '<h3 class="text-xl font-semibold">' | grep -v '<h3' | sed 's/<[^>]*>//g' | sed '/^[[:space:]]*$/d' | head -5)
-          links=$(echo "$html" | grep -o 'href="/zh/article/[^"]*"' | sed 's/href="//;s/"//' | head -5 | sed 's/^/https:\/\/news.aibase.com/')
-          descs=$(echo "$html" | grep -A2 '<p class="text-gray-600 text-sm line-clamp-2">' | grep -v '<p' | sed 's/<[^>]*>//g' | sed '/^[[:space:]]*$/d' | head -5)
+          # 提取前5条（API解析规则，我已经写好）
+          titles=$(echo "$data" | jq -r '.items[].title' 2>/dev/null | head -5)
+          summaries=$(echo "$data" | jq -r '.items[].summary' 2>/dev/null | head -5)
+          urls=$(echo "$data" | jq -r '.items[].url' 2>/dev/null | head -5)
 
-          # 判断是否抓到内容
-          count=0
-          for i in {1..5}; do
-            title=$(echo "$titles" | sed -n "${i}p")
-            if [ -n "$title" ]; then
-              count=$((count+1))
-            fi
-          done
-
-          # 组装消息
-          if [ $count -eq 0 ]; then
+          # 判断是否成功
+          count=$(echo "$titles" | wc -l)
+          if [ $count -lt 1 ]; then
             msg="### 机器人提醒\n\n⚠️ 抓取数据未成功，请直接访问 https://news.aibase.com/zh/daily 查看。"
           else
             msg="### 机器人提醒\n### 🤖 每日AI早报 $(date +'%Y年%m月%d日')\n\n"
             for i in {1..5}; do
-              title=$(echo "$titles" | sed -n "${i}p")
-              link=$(echo "$links" | sed -n "${i}p")
-              desc=$(echo "$descs" | sed -n "${i}p")
-              if [ -n "$title" ]; then
-                msg+="$i. **[$title]($link)**\n$desc\n\n"
+              t=$(echo "$titles" | sed -n "${i}p")
+              s=$(echo "$summaries" | sed -n "${i}p")
+              u=$(echo "$urls" | sed -n "${i}p")
+              if [ -n "$t" ]; then
+                msg+="$i. **[$t]($u)**\n$s\n\n"
               fi
             done
-            msg+="⏰ 每日早8点自动推送 | 来源：AIBase"
+            msg+="⏰ 每日早8点自动推送 | 数据来源：AIBase官方API"
           fi
 
           # 发送钉钉
           curl -s "$WEBHOOK" \
             -H "Content-Type: application/json" \
             -d '{
-              "msgtype": "markdown",
-              "markdown": {
-                "title": "机器人提醒",
-                "text": "'"$msg"'"
+              "msgtype":"markdown",
+              "markdown":{
+                "title":"机器人提醒",
+                "text":"'"$msg"'"
               }
             }'
