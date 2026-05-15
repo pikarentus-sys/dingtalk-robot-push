@@ -1,22 +1,24 @@
 name: AI日报主动体（前五条+标题+简介+可点跳转）
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 0 * * *'  # 北京时间早8点
   workflow_dispatch:
 
 jobs:
   发送新闻:
     runs-on: ubuntu-latest
     steps:
-      - name: 抓取news.aibase.com 前五条AI资讯
-        id: get_news  # 改成纯英文id
+      - name: 抓取并发送AI资讯到钉钉
         run: |
+          # 1. 抓取页面
           html=$(curl -s --connect-timeout 10 "https://news.aibase.com/zh/daily")
           
+          # 2. 提取标题+链接+简介
           titles=$(echo "$html" | grep -A1 '<h3 class="text-xl font-semibold">' | grep -v '<h3' | sed 's/<[^>]*>//g' | sed '/^[[:space:]]*$/d' | head -5)
           urls=$(echo "$html" | grep -o 'href="/zh/article/[^"]*"' | sed 's/href="//;s/"//' | head -5 | sed 's/^/https:\/\/news.aibase.com/')
           summaries=$(echo "$html" | grep -A2 '<p class="text-gray-600 text-sm line-clamp-2">' | grep -v '<p' | sed 's/<[^>]*>//g' | sed '/^[[:space:]]*$/d' | head -5)
           
+          # 3. 组装钉钉消息
           result="### 机器人提醒\n### 🤖 每日AI早报 $(date +'%Y年%m月%d日')\n\n"
           count=0
           
@@ -26,33 +28,24 @@ jobs:
             summary=$(echo "$summaries" | sed -n "${i}p")
             
             if [ -n "$title" ]; then
-              result+="$i. **[$title]($url)**\n"
-              result+="$summary\n\n"
+              result+="$i. **[$title]($url)**\n$summary\n\n"
               count=$((count+1))
             fi
           done
           
           if [ $count -eq 0 ]; then
             result="### 机器人提醒\n\n⚠️ 今日暂无抓取到最新AI资讯，请前往 https://news.aibase.com/zh/daily 查看。"
+          else
+            result+="⏰ 每日早8点自动推送 | 来源: AIBase"
           fi
           
-          result+="⏰ 每日早8点自动推送 | 来源: AIBase"
-          
-          echo "content<<EOF
-          $result
-          EOF" >> $GITHUB_OUTPUT
-
-      - name: 到个体钉钉
-        uses: fjogeleit/http-request-action@v1
-        with:
-          url: 'https://oapi.dingtalk.com/robot/send?access_token=22fe2796127ebe0288d78fdd1e0a3b1c1e97f409e5fd680e6ad5f272c945a770'
-          method: POST
-          contentType: application/json
-          data: |
-            {
-              "msgtype": "markdown",
-              "markdown": {
-                "title": "机器人提醒",
-                "text": "${{ steps.get_news.outputs.content }}"  # 这里也改成英文id引用
+          # 4. 直接发送钉钉（不再用中间步骤传值）
+          curl -s "https://oapi.dingtalk.com/robot/send?access_token=22fe2796127ebe0288d78fdd1e0a3b1c1e97f409e5fd680e6ad5f272c945a770" \
+            -H "Content-Type: application/json" \
+            -d "{
+              \"msgtype\": \"markdown\",
+              \"markdown\": {
+                \"title\": \"机器人提醒\",
+                \"text\": \"$result\"
               }
-            }
+            }"
