@@ -11,9 +11,9 @@ jobs:
       - name: 抓取今日AI最新资讯（5条）
         id: get_news
         run: |
-          # 修复变量名：GITHUB_OUTPUT
           content=$(curl -s https://news.baidu.com/list?card=AI | grep -A10 "<h3>" | head -25 | sed 's/<[^>]*>//g' | sed '/^$/d' | head -5)
           echo "news_content<<EOF" >> $GITHUB_OUTPUT
+          echo "### 机器人提醒" >> $GITHUB_OUTPUT
           echo "### 🤖 每日AI早报（$(date +'%Y年%m月%d日')）" >> $GITHUB_OUTPUT
           echo "" >> $GITHUB_OUTPUT
           echo "$content" | awk '{print NR". " $0}' >> $GITHUB_OUTPUT
@@ -31,7 +31,7 @@ jobs:
             {
               "msgtype": "markdown",
               "markdown": {
-                "title": "每日AI早报",
+                "title": "机器人提醒",
                 "text": "${{ steps.get_news.outputs.news_content }}"
               }
             }
