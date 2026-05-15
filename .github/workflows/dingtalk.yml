@@ -1,47 +1,55 @@
-name: AI日报推送（前五条+标题+简介+可点跳转）
+name: AI日报主动体（前五条+标题+简介+可点跳转）
 on:
+  # 北京时间早8点 = UTC 0点
   schedule:
-    - cron: '0 0 * * *'  # 北京时间早8点
+    - cron: '0 0 * * *'
   workflow_dispatch:
 
 jobs:
-  send-news:
+  发送新闻:
     runs-on: ubuntu-latest
     steps:
-      - name: 抓取 news.aibase.com 前五条AI资讯
-        id: get_news
+      - name: 抓取news.aibase.com 前五条AI资讯
+        id: 获取新闻
         run: |
           # 抓取页面
           html=$(curl -s --connect-timeout 10 "https://news.aibase.com/zh/daily")
-
-          # 提取 标题 + 链接 + 简介
-          titles=$(echo "$html" | grep -o '"title":"[^"]*"' | head -5 | sed 's/"title":"//;s/"$//')
-          urls=$(echo "$html" | grep -o '"url":"[^"]*"' | head -5 | sed 's/"url":"//;s/"$//')
-          summaries=$(echo "$html" | grep -o '"summary":"[^"]*"' | head -5 | sed 's/"summary":"//;s/"$//')
-
-          # 组装成钉钉消息
+          
+          # 提取标题+链接+简介（基于页面可见结构，稳定可靠）
+          titles=$(echo "$html" | grep -A1 '<h3 class="text-xl font-semibold">' | grep -v '<h3' | sed 's/<[^>]*>//g' | sed '/^[[:space:]]*$/d' | head -5)
+          urls=$(echo "$html" | grep -o 'href="/zh/article/[^"]*"' | sed 's/href="//;s/"//' | head -5 | sed 's/^/https:\/\/news.aibase.com/')
+          summaries=$(echo "$html" | grep -A2 '<p class="text-gray-600 text-sm line-clamp-2">' | grep -v '<p' | sed 's/<[^>]*>//g' | sed '/^[[:space:]]*$/d' | head -5)
+          
+          # 组装钉钉消息（带「机器人提醒」关键词）
           result="### 机器人提醒\n### 🤖 每日AI早报 $(date +'%Y年%m月%d日')\n\n"
-
+          count=0
+          
           # 循环拼接前五条
-          i=1
-          while [ $i -le 5 ]; do
+          for i in {1..5}; do
             title=$(echo "$titles" | sed -n "${i}p")
             url=$(echo "$urls" | sed -n "${i}p")
             summary=$(echo "$summaries" | sed -n "${i}p")
-
-            result+="$i. **[$title]($url)**\n"
-            result+="$summary\n\n"
-            i=$((i+1))
+            
+            if [ -n "$title" ]; then
+              result+="$i. **[$title]($url)**\n"
+              result+="$summary\n\n"
+              count=$((count+1))
+            fi
           done
-
-          result+="⏰ 每日早8点自动推送 | 来源：AIBase"
-
+          
+          # 兜底：如果一条都没抓到
+          if [ $count -eq 0 ]; then
+            result="### 机器人提醒\n\n⚠️ 今日暂无抓取到最新AI资讯，请前往 https://news.aibase.com/zh/daily 查看。"
+          fi
+          
+          result+="⏰ 每日早8点自动推送 | 来源: AIBase"
+          
           # 输出给下一步
-          echo "content<<EOF
+          echo "内容<<EOF
           $result
           EOF" >> $GITHUB_OUTPUT
 
-      - name: 推送到钉钉
+      - name: 到个体钉钉
         uses: fjogeleit/http-request-action@v1
         with:
           url: 'https://oapi.dingtalk.com/robot/send?access_token=22fe2796127ebe0288d78fdd1e0a3b1c1e97f409e5fd680e6ad5f272c945a770'
@@ -52,6 +60,6 @@ jobs:
               "msgtype": "markdown",
               "markdown": {
                 "title": "机器人提醒",
-                "text": "${{ steps.get_news.outputs.content }}"
+                "text": "${{ steps.获取新闻.outputs.内容 }}"
               }
             }
