@@ -1,6 +1,5 @@
 name: AI日报主动体（前五条+标题+简介+可点跳转）
 on:
-  # 北京时间早8点 = UTC 0点
   schedule:
     - cron: '0 0 * * *'
   workflow_dispatch:
@@ -10,21 +9,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: 抓取news.aibase.com 前五条AI资讯
-        id: 获取新闻
+        id: get_news  # 改成纯英文id
         run: |
-          # 抓取页面
           html=$(curl -s --connect-timeout 10 "https://news.aibase.com/zh/daily")
           
-          # 提取标题+链接+简介（基于页面可见结构，稳定可靠）
           titles=$(echo "$html" | grep -A1 '<h3 class="text-xl font-semibold">' | grep -v '<h3' | sed 's/<[^>]*>//g' | sed '/^[[:space:]]*$/d' | head -5)
           urls=$(echo "$html" | grep -o 'href="/zh/article/[^"]*"' | sed 's/href="//;s/"//' | head -5 | sed 's/^/https:\/\/news.aibase.com/')
           summaries=$(echo "$html" | grep -A2 '<p class="text-gray-600 text-sm line-clamp-2">' | grep -v '<p' | sed 's/<[^>]*>//g' | sed '/^[[:space:]]*$/d' | head -5)
           
-          # 组装钉钉消息（带「机器人提醒」关键词）
           result="### 机器人提醒\n### 🤖 每日AI早报 $(date +'%Y年%m月%d日')\n\n"
           count=0
           
-          # 循环拼接前五条
           for i in {1..5}; do
             title=$(echo "$titles" | sed -n "${i}p")
             url=$(echo "$urls" | sed -n "${i}p")
@@ -37,15 +32,13 @@ jobs:
             fi
           done
           
-          # 兜底：如果一条都没抓到
           if [ $count -eq 0 ]; then
             result="### 机器人提醒\n\n⚠️ 今日暂无抓取到最新AI资讯，请前往 https://news.aibase.com/zh/daily 查看。"
           fi
           
           result+="⏰ 每日早8点自动推送 | 来源: AIBase"
           
-          # 输出给下一步
-          echo "内容<<EOF
+          echo "content<<EOF
           $result
           EOF" >> $GITHUB_OUTPUT
 
@@ -60,6 +53,6 @@ jobs:
               "msgtype": "markdown",
               "markdown": {
                 "title": "机器人提醒",
-                "text": "${{ steps.获取新闻.outputs.内容 }}"
+                "text": "${{ steps.get_news.outputs.content }}"  # 这里也改成英文id引用
               }
             }
