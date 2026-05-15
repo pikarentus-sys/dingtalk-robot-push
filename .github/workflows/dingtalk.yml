@@ -1,23 +1,57 @@
-name: 每日早8点AI资讯
+name: AI日报推送（前五条+标题+简介+可点跳转）
 on:
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 0 * * *'  # 北京时间早8点
   workflow_dispatch:
 
 jobs:
-  send:
+  send-news:
     runs-on: ubuntu-latest
     steps:
-      - name: 发送消息
+      - name: 抓取 news.aibase.com 前五条AI资讯
+        id: get_news
+        run: |
+          # 抓取页面
+          html=$(curl -s --connect-timeout 10 "https://news.aibase.com/zh/daily")
+
+          # 提取 标题 + 链接 + 简介
+          titles=$(echo "$html" | grep -o '"title":"[^"]*"' | head -5 | sed 's/"title":"//;s/"$//')
+          urls=$(echo "$html" | grep -o '"url":"[^"]*"' | head -5 | sed 's/"url":"//;s/"$//')
+          summaries=$(echo "$html" | grep -o '"summary":"[^"]*"' | head -5 | sed 's/"summary":"//;s/"$//')
+
+          # 组装成钉钉消息
+          result="### 机器人提醒\n### 🤖 每日AI早报 $(date +'%Y年%m月%d日')\n\n"
+
+          # 循环拼接前五条
+          i=1
+          while [ $i -le 5 ]; do
+            title=$(echo "$titles" | sed -n "${i}p")
+            url=$(echo "$urls" | sed -n "${i}p")
+            summary=$(echo "$summaries" | sed -n "${i}p")
+
+            result+="$i. **[$title]($url)**\n"
+            result+="$summary\n\n"
+            i=$((i+1))
+          done
+
+          result+="⏰ 每日早8点自动推送 | 来源：AIBase"
+
+          # 输出给下一步
+          echo "content<<EOF
+          $result
+          EOF" >> $GITHUB_OUTPUT
+
+      - name: 推送到钉钉
         uses: fjogeleit/http-request-action@v1
         with:
           url: 'https://oapi.dingtalk.com/robot/send?access_token=22fe2796127ebe0288d78fdd1e0a3b1c1e97f409e5fd680e6ad5f272c945a770'
-          method: 'POST'
-          contentType: 'application/json'
+          method: POST
+          contentType: application/json
           data: |
             {
-              "msgtype": "text",
-              "text": {
-                "content": "机器人提醒：\n1. OpenAI发布新一代大模型\n2. 阿里通义千问升级多模态能力\n3. 谷歌Gemini 1.5 Pro全面开放\n4. AI视频生成技术突破\n5. 国内AI大模型全面降价"
+              "msgtype": "markdown",
+              "markdown": {
+                "title": "机器人提醒",
+                "text": "${{ steps.get_news.outputs.content }}"
               }
             }
